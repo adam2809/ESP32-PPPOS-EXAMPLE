@@ -30,7 +30,7 @@
 #include "lwip/sys.h"
 #include "lwip/netdb.h"
 #include "lwip/dns.h"
-#include "lwip/pppapi.h"
+#include "netif/ppp/pppapi.h"
 
 #include "mbedtls/platform.h"
 #include "mbedtls/net.h"
@@ -44,7 +44,7 @@
 #include <esp_event.h>
 #include <esp_wifi.h>
 
-#include "apps/sntp/sntp.h"
+#include "lwip/apps/sntp.h"
 #include "cJSON.h"
 
 #include "libGSM.h"
