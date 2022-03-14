@@ -51,8 +51,6 @@ const char *PPP_User = CONFIG_GSM_INTERNET_USER;
 const char *PPP_Pass = CONFIG_GSM_INTERNET_PASSWORD;
 static int uart_num = UART_NUM_1;
 
-static uint8_t tcpip_adapter_initialized = 0;
-
 // The PPP control block
 static ppp_pcb *ppp = NULL;
 
@@ -530,185 +528,53 @@ static void pppos_client_task()
 	xSemaphoreGive(pppos_mutex);
 
 	enableAllInitCmd();
-
-	while(1)
-	{
-		#if GSM_DEBUG
-		ESP_LOGI(TAG,"GSM initialization start");
-		#endif
-		vTaskDelay(500 / portTICK_PERIOD_MS);
-
-		int gsmCmdIter = 0;
-		int nfail = 0;
-		// * GSM Initialization loop
-		while(gsmCmdIter < GSM_InitCmdsSize)
-		{
-			if (GSM_Init[gsmCmdIter]->skip) {
-				#if GSM_DEBUG
-				infoCommand(GSM_Init[gsmCmdIter]->cmd, GSM_Init[gsmCmdIter]->cmdSize, "Skip command:");
-				#endif
-				gsmCmdIter++;
-				continue;
-			}
-			if (atCmd_waitResponse(GSM_Init[gsmCmdIter]->cmd,
-					GSM_Init[gsmCmdIter]->cmdResponseOnOk, NULL,
-					GSM_Init[gsmCmdIter]->cmdSize,
-					GSM_Init[gsmCmdIter]->timeoutMs, NULL, 0) == 0)
-			{
-				// * No response or not as expected, start from first initialization command
-				#if GSM_DEBUG
-				ESP_LOGW(TAG,"Wrong response, restarting...");
-				#endif
-
-				nfail++;
-				if (nfail > 20) goto exit;
-
-				vTaskDelay(3000 / portTICK_PERIOD_MS);
-				gsmCmdIter = 0;
-				continue;
-			}
-
-			if (GSM_Init[gsmCmdIter]->delayMs > 0) vTaskDelay(GSM_Init[gsmCmdIter]->delayMs / portTICK_PERIOD_MS);
-			GSM_Init[gsmCmdIter]->skip = 1;
-			if (GSM_Init[gsmCmdIter] == &cmd_Reg) GSM_Init[gsmCmdIter]->delayMs = 0;
-			// Next command
-			gsmCmdIter++;
-		}
-
-		#if GSM_DEBUG
-		ESP_LOGI(TAG,"GSM initialized.");
-		#endif
-
-		xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-		if (gsm_status == GSM_STATE_FIRSTINIT) {
-			xSemaphoreGive(pppos_mutex);
-			// ** After first successful initialization create PPP control block
-			ppp = pppapi_pppos_create(&ppp_netif,
-					ppp_output_callback, ppp_status_cb, NULL);
-
-			if (ppp == NULL) {
-				#if GSM_DEBUG
-				ESP_LOGE(TAG, "Error initializing PPPoS");
-				#endif
-				break; // end task
-			}
-			//netif_set_default(&ppp_netif);
-		}
-		else xSemaphoreGive(pppos_mutex);
-
-		pppapi_set_default(ppp);
-		pppapi_set_auth(ppp, PPPAUTHTYPE_PAP, PPP_User, PPP_Pass);
-		//pppapi_set_auth(ppp, PPPAUTHTYPE_NONE, PPP_User, PPP_Pass);
-
-		xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-		gsm_status = GSM_STATE_IDLE;
-		xSemaphoreGive(pppos_mutex);
-		pppapi_connect(ppp, 0);
-
-		// *** LOOP: Handle GSM modem responses & disconnects ***
-		while(1) {
-			// === Check if disconnect requested ===
-			xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-			if (do_pppos_connect <= 0) {
-				int end_task = do_pppos_connect;
-				do_pppos_connect = 1;
-				xSemaphoreGive(pppos_mutex);
-				#if GSM_DEBUG
-				printf("\r\n");
-				ESP_LOGI(TAG, "Disconnect requested.");
-				#endif
-
-				pppapi_close(ppp, 0);
-				int gstat = 1;
-				while (gsm_status != GSM_STATE_DISCONNECTED) {
-					// Handle data received from GSM
-					memset(data, 0, BUF_SIZE);
-					int len = uart_read_bytes(uart_num, (uint8_t*)data, BUF_SIZE, 30 / portTICK_RATE_MS);
-					if (len > 0)	{
-						pppos_input_tcpip(ppp, (u8_t*)data, len);
-						xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-					    pppos_tx_count += len;
-						xSemaphoreGive(pppos_mutex);
-					}
-					xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-					gstat = gsm_status;
-					xSemaphoreGive(pppos_mutex);
-				}
-				vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-				xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-				uint8_t rfoff = gsm_rfOff;
-				xSemaphoreGive(pppos_mutex);
-				_disconnect(rfoff); // Disconnect GSM if still connected
-
-				#if GSM_DEBUG
-				ESP_LOGI(TAG, "Disconnected.");
-				#endif
-
-				gsmCmdIter = 0;
-				enableAllInitCmd();
-				xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-				gsm_status = GSM_STATE_IDLE;
-				do_pppos_connect = 0;
-				xSemaphoreGive(pppos_mutex);
-
-				if (end_task < 0) goto exit;
-
-				// === Wait for reconnect request ===
-				gstat = 0;
-				while (gstat == 0) {
-					vTaskDelay(100 / portTICK_PERIOD_MS);
-					xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-					gstat = do_pppos_connect;
-					xSemaphoreGive(pppos_mutex);
-				}
-				#if GSM_DEBUG
-				printf("\r\n");
-				ESP_LOGI(TAG, "Reconnect requested.");
-				#endif
-				break;
-			}
-
-			// === Check if disconnected ===
-			if (gsm_status == GSM_STATE_DISCONNECTED) {
-				xSemaphoreGive(pppos_mutex);
-				#if GSM_DEBUG
-				printf("\r\n");
-				ESP_LOGE(TAG, "Disconnected, trying again...");
-				#endif
-				pppapi_close(ppp, 0);
-
-				enableAllInitCmd();
-				gsmCmdIter = 0;
-				gsm_status = GSM_STATE_IDLE;
-				vTaskDelay(10000 / portTICK_PERIOD_MS);
-				break;
-			}
-			else xSemaphoreGive(pppos_mutex);
-
-			// === Handle data received from GSM ===
-			memset(data, 0, BUF_SIZE);
-			int len = uart_read_bytes(uart_num, (uint8_t*)data, BUF_SIZE, 30 / portTICK_RATE_MS);
-			if (len > 0)	{
-				pppos_input_tcpip(ppp, (u8_t*)data, len);
-				xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-			    pppos_tx_count += len;
-				xSemaphoreGive(pppos_mutex);
-			}
-
-		}  // Handle GSM modem responses & disconnects loop
-	}  // main task loop
-
-exit:
-	if (data) free(data);  // free data buffer
-	if (ppp) ppp_free(ppp);
-
-	xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-	gsm_status = GSM_STATE_FIRSTINIT;
-	xSemaphoreGive(pppos_mutex);
 	#if GSM_DEBUG
-	ESP_LOGE(TAG, "PPPoS TASK TERMINATED");
+	ESP_LOGI(TAG,"GSM initialization start");
 	#endif
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+
+	int gsmCmdIter = 0;
+	int nfail = 0;
+	// * GSM Initialization loop
+	while(gsmCmdIter < GSM_InitCmdsSize)
+	{
+		if (GSM_Init[gsmCmdIter]->skip) {
+			#if GSM_DEBUG
+			infoCommand(GSM_Init[gsmCmdIter]->cmd, GSM_Init[gsmCmdIter]->cmdSize, "Skip command:");
+			#endif
+			gsmCmdIter++;
+			continue;
+		}
+		if (atCmd_waitResponse(GSM_Init[gsmCmdIter]->cmd,
+				GSM_Init[gsmCmdIter]->cmdResponseOnOk, NULL,
+				GSM_Init[gsmCmdIter]->cmdSize,
+				GSM_Init[gsmCmdIter]->timeoutMs, NULL, 0) == 0)
+		{
+			// * No response or not as expected, start from first initialization command
+			#if GSM_DEBUG
+			ESP_LOGW(TAG,"Wrong response, restarting...");
+			#endif
+
+			nfail++;
+			if (nfail > 20) goto exit;
+
+			vTaskDelay(3000 / portTICK_PERIOD_MS);
+			gsmCmdIter = 0;
+			continue;
+		}
+
+		if (GSM_Init[gsmCmdIter]->delayMs > 0) vTaskDelay(GSM_Init[gsmCmdIter]->delayMs / portTICK_PERIOD_MS);
+		GSM_Init[gsmCmdIter]->skip = 1;
+		if (GSM_Init[gsmCmdIter] == &cmd_Reg) GSM_Init[gsmCmdIter]->delayMs = 0;
+		// Next command
+		gsmCmdIter++;
+	}
+
+	#if GSM_DEBUG
+	ESP_LOGI(TAG,"GSM initialized.");
+	#endif
+	
+exit:
 	vTaskDelete(NULL);
 }
 
@@ -723,10 +589,6 @@ int ppposInit()
 	if (pppos_mutex == NULL) pppos_mutex = xSemaphoreCreateMutex();
 	if (pppos_mutex == NULL) return 0;
 
-	if (tcpip_adapter_initialized == 0) {
-		tcpip_adapter_init();
-		tcpip_adapter_initialized = 1;
-	}
 	xTaskCreate(&pppos_client_task, "pppos_client_task", PPPOS_CLIENT_STACK_SIZE, NULL, 10, NULL);
 	vTaskDelay(10 / portTICK_RATE_MS);
 	xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
