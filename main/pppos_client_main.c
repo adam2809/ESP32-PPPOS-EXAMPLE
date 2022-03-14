@@ -65,6 +65,14 @@ static const char *SMS_TAG = "[SMS]";
 //======================================
 static void sms_task(void *pvParameters)
 {
+    uint32_t ulNotifiedValue = 0;
+    xTaskNotifyWait(
+        0x00,      /* Don't clear any notification bits on entry. */
+        ULONG_MAX, /* Reset the notification value to 0 on exit. */
+        &ulNotifiedValue, /* Notified value pass out in ulNotifiedValue. */
+        portMAX_DELAY
+    );
+
 	if (!(xSemaphoreTake(http_mutex, TASK_SEMAPHORE_WAIT))) {
 		ESP_LOGE(SMS_TAG, "*** ERROR: CANNOT GET MUTEX ***n");
 		while (1) {
@@ -158,6 +166,7 @@ start:
 }
 #endif
 
+TaskHandle_t sms_task_handle = NULL;
 
 //=============
 void app_main()
@@ -174,20 +183,6 @@ void app_main()
     gpio_config(&io_conf);
     gpio_set_level(GPIO_NUM_25, 0);
     gpio_set_level(GPIO_NUM_4, 1);
-
-	if (ppposInit() == 0) {
-		ESP_LOGE("PPPoS EXAMPLE", "ERROR: GSM not initialized, HALTED");
-		while (1) {
-			vTaskDelay(1000 / portTICK_RATE_MS);
-		}
-	}
-	#ifdef CONFIG_GSM_SEND_SMS
-	// ==== Create SMS task ====
-    xTaskCreate(&sms_task, "sms_task", 4096, NULL, 3, NULL);
-    #endif
-    
-    while(1)
-	{
-		vTaskDelay(1000 / portTICK_RATE_MS);
-	}
+    xTaskCreate(&sms_task, "sms_task", 4096, NULL, 3, &sms_task_handle);
+	ppposInit(sms_task_handle);
 }

@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
@@ -480,7 +481,7 @@ static void enableAllInitCmd()
  * Handles GSM initialization, disconnects and GSM modem responses
  */
 //-----------------------------
-static void pppos_client_task()
+static void pppos_client_task(void* params)
 {
 	xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
 	xSemaphoreGive(pppos_mutex);
@@ -574,13 +575,17 @@ static void pppos_client_task()
 	ESP_LOGI(TAG,"GSM initialized.");
 	#endif
 	
+	xTaskNotify(
+		(TaskHandle_t) params,
+		0,
+		eSetValueWithOverwrite
+	);	
 exit:
 	vTaskDelete(NULL);
 }
 
 //=============
-int ppposInit()
-{
+int ppposInit(TaskHandle_t task_to_notify_handle){
 	if (pppos_mutex != NULL) xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
 	do_pppos_connect = 1;
 	int gstat = 0;
@@ -589,7 +594,7 @@ int ppposInit()
 	if (pppos_mutex == NULL) pppos_mutex = xSemaphoreCreateMutex();
 	if (pppos_mutex == NULL) return 0;
 
-	xTaskCreate(&pppos_client_task, "pppos_client_task", PPPOS_CLIENT_STACK_SIZE, NULL, 10, NULL);
+	xTaskCreate(&pppos_client_task, "pppos_client_task", PPPOS_CLIENT_STACK_SIZE, (void*) task_to_notify_handle, 10, NULL);
 	vTaskDelay(10 / portTICK_RATE_MS);
 	xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
 	xSemaphoreGive(pppos_mutex);
@@ -722,10 +727,16 @@ static int sms_ready()
 	if (ppposStatus() != GSM_STATE_IDLE) return 0;
 
 	int res = atCmd_waitResponse("AT+CFUN?\r\n", "+CFUN: 1", NULL, -1, 1000, NULL, 0);
-	if (res != 1) return 0;
+	if (res != 1){
+		ESP_LOGD(TAG,"Failed to send command cfun");
+		return 0;
+	} 
 
 	res = atCmd_waitResponse("AT+CMGF=1\r\n", GSM_OK_Str, NULL, -1, 1000, NULL, 0);
-	if (res != 1) return 0;
+	if (res != 1){
+		ESP_LOGD(TAG,"Failed to send command cmgf");
+		return 0;
+	} 
 	return 1;
 }
 
