@@ -21,6 +21,7 @@
 #include "nvs_flash.h"
 #include "freertos/semphr.h"
 
+#include "driver/gpio.h"
 #include "driver/uart.h"
 
 #include "netif/ppp/pppos.h"
@@ -949,6 +950,17 @@ static void http_server(void *pvParameters) {
 void app_main()
 {
     http_mutex = xSemaphoreCreateMutex();
+
+
+    gpio_config_t io_conf = {};
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pin_bit_mask = 1ULL<<GPIO_NUM_25 | 1ULL<<GPIO_NUM_4;
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 0;
+    gpio_config(&io_conf);
+    gpio_set_level(GPIO_NUM_25, 0);
+    gpio_set_level(GPIO_NUM_4, 1);
 
 	#ifdef CONFIG_GSM_USE_WIFI_AP
 	// ----- Set AP(STA)---------------------------------------------------
