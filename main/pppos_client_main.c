@@ -50,20 +50,10 @@
 
 #include "libGSM.h"
 
-#ifdef CONFIG_GSM_USE_WIFI_AP
-#include "lwip/api.h"
-#include "lwip/err.h"
-#include "lwip/netdb.h"
-#endif
-
 #define EXAMPLE_TASK_PAUSE	300		// pause between task runs in seconds
 #define TASK_SEMAPHORE_WAIT 140000	// time to wait for mutex in miliseconds
 
 QueueHandle_t http_mutex;
-
-static const char *TIME_TAG = "[SNTP]";
-static const char *HTTP_TAG = "[HTTP]";
-static const char *HTTPS_TAG = "[HTTPS]";
 
 #ifdef CONFIG_GSM_SEND_SMS
 static const char *SMS_TAG = "[SMS]";

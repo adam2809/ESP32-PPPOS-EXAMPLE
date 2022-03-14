@@ -44,12 +44,6 @@ config GSM_APN
     help
        Network provider's APN for internet access
 
-config GSM_USE_WIFI_AP
-    bool "Start WiFi and AP"
-    default n
-    help
-        Start WiFi as Acces Point and create WebServer task
-
 config GSM_SEND_SMS
     bool "Send SMS message"
     default n
