@@ -43,7 +43,6 @@ static uint8_t gsm_status = GSM_STATE_FIRSTINIT;
 static int do_pppos_connect = 1;
 static uint32_t pppos_rx_count;
 static uint32_t pppos_tx_count;
-static uint8_t pppos_task_started = 0;
 static uint8_t gsm_rfOff = 0;
 
 // local variables
@@ -486,7 +485,6 @@ static void enableAllInitCmd()
 static void pppos_client_task()
 {
 	xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-	pppos_task_started = 1;
 	xSemaphoreGive(pppos_mutex);
 
     // Allocate receive buffer
@@ -706,7 +704,6 @@ exit:
 	if (ppp) ppp_free(ppp);
 
 	xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-	pppos_task_started = 0;
 	gsm_status = GSM_STATE_FIRSTINIT;
 	xSemaphoreGive(pppos_mutex);
 	#if GSM_DEBUG
@@ -721,33 +718,25 @@ int ppposInit()
 	if (pppos_mutex != NULL) xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
 	do_pppos_connect = 1;
 	int gstat = 0;
-	int task_s = pppos_task_started;
 	if (pppos_mutex != NULL) xSemaphoreGive(pppos_mutex);
 
-	if (task_s == 0) {
-		if (pppos_mutex == NULL) pppos_mutex = xSemaphoreCreateMutex();
-		if (pppos_mutex == NULL) return 0;
+	if (pppos_mutex == NULL) pppos_mutex = xSemaphoreCreateMutex();
+	if (pppos_mutex == NULL) return 0;
 
-		if (tcpip_adapter_initialized == 0) {
-			tcpip_adapter_init();
-			tcpip_adapter_initialized = 1;
-		}
-		xTaskCreate(&pppos_client_task, "pppos_client_task", PPPOS_CLIENT_STACK_SIZE, NULL, 10, NULL);
-		while (task_s == 0) {
-			vTaskDelay(10 / portTICK_RATE_MS);
-			xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
-			task_s = pppos_task_started;
-			xSemaphoreGive(pppos_mutex);
-		}
+	if (tcpip_adapter_initialized == 0) {
+		tcpip_adapter_init();
+		tcpip_adapter_initialized = 1;
 	}
+	xTaskCreate(&pppos_client_task, "pppos_client_task", PPPOS_CLIENT_STACK_SIZE, NULL, 10, NULL);
+	vTaskDelay(10 / portTICK_RATE_MS);
+	xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
+	xSemaphoreGive(pppos_mutex);
 
 	while (gstat != 1) {
 		vTaskDelay(10 / portTICK_RATE_MS);
 		xSemaphoreTake(pppos_mutex, PPPOSMUTEX_TIMEOUT);
 		gstat = gsm_status;
-		task_s = pppos_task_started;
 		xSemaphoreGive(pppos_mutex);
-		if (task_s == 0) return 0;
 	}
 
 	return 1;
