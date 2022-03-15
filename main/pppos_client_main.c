@@ -55,12 +55,7 @@
 
 QueueHandle_t http_mutex;
 
-#ifdef CONFIG_GSM_SEND_SMS
 static const char *SMS_TAG = "[SMS]";
-#endif
-
-
-#ifdef CONFIG_GSM_SEND_SMS
 
 //======================================
 static void sms_task(void *pvParameters)
@@ -156,7 +151,6 @@ start:
         }
     }
 }
-#endif
 
 
 //=============

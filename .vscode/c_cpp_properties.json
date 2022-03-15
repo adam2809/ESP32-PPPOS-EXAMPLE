@@ -242,7 +242,7 @@
                 "_GNU_SOURCE",
                 "IDF_VER=\"4.3.1\"",
                 "ESP_PLATFORM",
-                "PLATFORMIO=50204",
+                "PLATFORMIO=50205",
                 "ARDUINO_TTGO_LoRa32_V2",
                 "CORE_DEBUG_LEVEL=5",
                 ""
