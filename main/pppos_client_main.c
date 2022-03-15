@@ -60,96 +60,27 @@ static const char *SMS_TAG = "[SMS]";
 //======================================
 static void sms_task(void *pvParameters)
 {
-	if (!(xSemaphoreTake(http_mutex, TASK_SEMAPHORE_WAIT))) {
-		ESP_LOGE(SMS_TAG, "*** ERROR: CANNOT GET MUTEX ***n");
-		while (1) {
-            vTaskDelay(10000 / portTICK_PERIOD_MS);
-		}
-	}
-
-	SMS_Messages messages;
 	uint32_t sms_time = 0;
 	char buf[160];
 
-	goto start;
+	ESP_LOGI(SMS_TAG, "===== SMS TEST =================================================\n");
 
-	while(1) {
-        if (!(xSemaphoreTake(http_mutex, TASK_SEMAPHORE_WAIT))) {
-			ESP_LOGE(SMS_TAG, "===== ERROR: CANNOT GET MUTEX ==================================\n");
-            vTaskDelay(30000 / portTICK_PERIOD_MS);
-			continue;
+	// ** For SMS operations we have to off line **
+	ppposDisconnect(0, 0);
+	gsm_RFOn();  // Turn on RF if it was turned off
+	vTaskDelay(2000 / portTICK_RATE_MS);
+
+	if (clock() > sms_time) {
+		if (smsSend(CONFIG_GSM_SMS_NUMBER, "Hi from ESP32 via GSM\rThis is the test message.") == 1) {
+			printf("SMS sent successfully\r\n");
 		}
-start:
-		ESP_LOGI(SMS_TAG, "===== SMS TEST =================================================\n");
-
-		// ** For SMS operations we have to off line **
-		ppposDisconnect(0, 0);
-		gsm_RFOn();  // Turn on RF if it was turned off
-		vTaskDelay(2000 / portTICK_RATE_MS);
-
-		if (clock() > sms_time) {
-			if (smsSend(CONFIG_GSM_SMS_NUMBER, "Hi from ESP32 via GSM\rThis is the test message.") == 1) {
-				printf("SMS sent successfully\r\n");
-			}
-			else {
-				printf("SMS send failed\r\n");
-			}
-			sms_time = clock() + CONFIG_GSM_SMS_INTERVAL; // next sms send time
+		else {
+			printf("SMS send failed\r\n");
 		}
-
-		smsRead(&messages, -1);
-		if (messages.nmsg) {
-			printf("\r\nReceived messages: %d\r\n", messages.nmsg);
-			SMS_Msg *msg;
-			for (int i=0; i<messages.nmsg; i++) {
-				msg = messages.messages + (i * sizeof(SMS_Msg));
-				struct tm * timeinfo;
-				timeinfo = localtime (&msg->time_value );
-				printf("-------------------------------------------\r\n");
-				printf("Message #%d: idx=%d, from: %s, status: %s, time: %s, tz=GMT+%d, timestamp: %s\r\n",
-						i+1, msg->idx, msg->from, msg->stat, msg->time, msg->tz, asctime(timeinfo));
-				printf("Text: [\r\n%s\r\n]\r\n\r\n", msg->msg);
-
-				// Check if SMS text contains known command
-				if (strstr(msg->msg, "Esp32 info") == msg->msg) {
-					char buffer[80];
-					time_t rawtime;
-					time(&rawtime);
-					timeinfo = localtime( &rawtime );
-					strftime(buffer,80,"%x %H:%M:%S", timeinfo);
-					sprintf(buf, "Hi, %s\rMy time is now\r%s", msg->from, buffer);
-					if (smsSend(CONFIG_GSM_SMS_NUMBER, buf) == 1) {
-						printf("Response sent successfully\r\n");
-					}
-					else {
-						printf("Response send failed\r\n");
-					}
-				}
-				// Free allocated message text buffer
-				if (msg->msg) free(msg->msg);
-				if ((i+1) == messages.nmsg) {
-					printf("Delete message at index %d\r\n", msg->idx);
-					if (smsDelete(msg->idx) == 0) printf("Delete ERROR\r\n");
-					else printf("Delete OK\r\n");
-				}
-			}
-			free(messages.messages);
-		}
-		else printf("\r\nNo messages\r\n");
-
-		// ** We can turn off GSM RF to save power
-		gsm_RFOff();
-		// ** We can now go back on line, or stay off line **
-        //ppposInit();
-
-        ESP_LOGI(SMS_TAG, "Waiting %d sec...", EXAMPLE_TASK_PAUSE);
-        ESP_LOGI(SMS_TAG, "================================================================\n\n");
-
-        xSemaphoreGive(http_mutex);
-        for(int countdown = EXAMPLE_TASK_PAUSE; countdown >= 0; countdown--) {
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-        }
-    }
+		sms_time = clock() + CONFIG_GSM_SMS_INTERVAL; // next sms send time
+	}
+	gsm_RFOff();
+	vTaskDelete(NULL);
 }
 
 
