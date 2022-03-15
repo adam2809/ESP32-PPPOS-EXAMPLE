@@ -886,7 +886,7 @@ int smsSend(char *smsnum, char *msg)
 	if (msgbuf == NULL) return 0;
 
 	sprintf(msgbuf, "%s\x1A", msg);
-	res = atCmd_waitResponse(msgbuf, "+CMGS: ", "ERROR", len+1, 40000, NULL, 0);
+	res = atCmd_waitResponse(msgbuf, "> ", "ERROR", len+1, 40000, NULL, 0);
 	if (res != 1) {
 		res = atCmd_waitResponse("\x1B", GSM_OK_Str, NULL, 1, 1000, NULL, 0);
 		res = 0;
