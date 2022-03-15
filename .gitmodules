@@ -1,0 +1,3 @@
+[submodule "components/esp-idf-ttgo-sim7000-lib"]
+	path = components/esp-idf-ttgo-sim7000-lib
+	url = git@github.com:adam2809/esp-idf-ttgo-sim7000-lib.git
