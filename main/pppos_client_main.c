@@ -175,12 +175,7 @@ void app_main()
     gpio_set_level(GPIO_NUM_25, 0);
     gpio_set_level(GPIO_NUM_4, 1);
 
-	if (ppposInit() == 0) {
-		ESP_LOGE("PPPoS EXAMPLE", "ERROR: GSM not initialized, HALTED");
-		while (1) {
-			vTaskDelay(1000 / portTICK_RATE_MS);
-		}
-	}
+	ppposInit();
 	#ifdef CONFIG_GSM_SEND_SMS
 	// ==== Create SMS task ====
     xTaskCreate(&sms_task, "sms_task", 4096, NULL, 3, NULL);
