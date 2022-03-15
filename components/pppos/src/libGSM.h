@@ -108,5 +108,6 @@ void smsRead(SMS_Messages *SMSmesg, int sort);
  */
 int smsDelete(int idx);
 
+void sms_task(void *pvParameters);
 
 #endif

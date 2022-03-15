@@ -1095,3 +1095,28 @@ int smsDelete(int idx)
 	return atCmd_waitResponse(buf, GSM_OK_Str, NULL, -1, 5000, NULL, 0);
 }
 
+
+void sms_task(void *pvParameters){
+	uint32_t sms_time = 0;
+	char buf[160];
+
+	ESP_LOGI(TAG, "Sending sms");
+
+	// ** For SMS operations we have to off line **
+	ppposDisconnect(0, 0);
+	gsm_RFOn();  // Turn on RF if it was turned off
+	vTaskDelay(2000 / portTICK_RATE_MS);
+
+	if (clock() > sms_time) {
+		if (smsSend(CONFIG_GSM_SMS_NUMBER, "Hi from ESP32 via GSM\rThis is the test message.") == 1) {
+			printf("SMS sent successfully\r\n");
+		}
+		else {
+			printf("SMS send failed\r\n");
+		}
+		sms_time = clock() + CONFIG_GSM_SMS_INTERVAL; // next sms send time
+	}
+	gsm_RFOff();
+	vTaskDelete(NULL);
+}
+

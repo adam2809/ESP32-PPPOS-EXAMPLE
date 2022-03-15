@@ -53,61 +53,23 @@
 #define EXAMPLE_TASK_PAUSE	300		// pause between task runs in seconds
 #define TASK_SEMAPHORE_WAIT 140000	// time to wait for mutex in miliseconds
 
-QueueHandle_t http_mutex;
-
 static const char *SMS_TAG = "[SMS]";
 
 //======================================
-static void sms_task(void *pvParameters)
-{
-	uint32_t sms_time = 0;
-	char buf[160];
-
-	ESP_LOGI(SMS_TAG, "===== SMS TEST =================================================\n");
-
-	// ** For SMS operations we have to off line **
-	ppposDisconnect(0, 0);
-	gsm_RFOn();  // Turn on RF if it was turned off
-	vTaskDelay(2000 / portTICK_RATE_MS);
-
-	if (clock() > sms_time) {
-		if (smsSend(CONFIG_GSM_SMS_NUMBER, "Hi from ESP32 via GSM\rThis is the test message.") == 1) {
-			printf("SMS sent successfully\r\n");
-		}
-		else {
-			printf("SMS send failed\r\n");
-		}
-		sms_time = clock() + CONFIG_GSM_SMS_INTERVAL; // next sms send time
-	}
-	gsm_RFOff();
-	vTaskDelete(NULL);
-}
 
 
 //=============
-void app_main()
-{
-    http_mutex = xSemaphoreCreateMutex();
-
-
-    gpio_config_t io_conf = {};
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = 1ULL<<GPIO_NUM_25 | 1ULL<<GPIO_NUM_4;
-    io_conf.pull_down_en = 0;
-    io_conf.pull_up_en = 0;
-    gpio_config(&io_conf);
-    gpio_set_level(GPIO_NUM_25, 0);
-    gpio_set_level(GPIO_NUM_4, 1);
+void app_main(){
+  gpio_config_t io_conf = {};
+  io_conf.intr_type = GPIO_INTR_DISABLE;
+  io_conf.mode = GPIO_MODE_OUTPUT;
+  io_conf.pin_bit_mask = 1ULL<<GPIO_NUM_25 | 1ULL<<GPIO_NUM_4;
+  io_conf.pull_down_en = 0;
+  io_conf.pull_up_en = 0;
+  gpio_config(&io_conf);
+  gpio_set_level(GPIO_NUM_25, 0);
+  gpio_set_level(GPIO_NUM_4, 1);
 
 	ppposInit();
-	#ifdef CONFIG_GSM_SEND_SMS
-	// ==== Create SMS task ====
-    xTaskCreate(&sms_task, "sms_task", 4096, NULL, 3, NULL);
-    #endif
-    
-    while(1)
-	{
-		vTaskDelay(1000 / portTICK_RATE_MS);
-	}
+  xTaskCreate(&sms_task, "sms_task", 4096, NULL, 3, NULL);
 }
